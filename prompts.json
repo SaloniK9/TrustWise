@@ -1,0 +1,10 @@
+{
+  "default_strategy": {
+    "steps": [
+      "vector_check",
+      "db_check",
+      "web_scrape_if_stale",
+      "research_lookup"
+    ]
+  }
+}

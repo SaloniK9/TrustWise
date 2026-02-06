@@ -1,0 +1,69 @@
+# ============================================================================
+# TrustWise - Complete Dependencies (Production-Ready)
+# ============================================================================
+# Updated: February 6, 2026
+# Python: 3.10+
+# Deployment: Docker + PostgreSQL
+# ============================================================================
+
+# --- WEB FRAMEWORK & SERVER ---
+fastapi==0.104.1                # Modern async web framework
+uvicorn[standard]==0.24.0       # ASGI server with uvloop support
+python-multipart==0.0.6         # File upload support
+
+# --- HTTP CLIENTS (Async & Sync) ---
+requests==2.31.0                # Synchronous HTTP (legacy compatibility)
+httpx==0.25.0                   # Async HTTP client (preferred for async code)
+aiohttp==3.9.1                  # Alternative async HTTP (optional)
+beautifulsoup4==4.12.2          # HTML parsing
+lxml==4.9.3                     # Fast XML/HTML parser backend
+
+# --- DATA EXTRACTION & VECTOR SEARCH (Phase 2) ---
+sentence-transformers==2.2.2    # Semantic embeddings for vectors
+chromadb==0.4.13                # Local vector database
+pinecone-client==2.2.4          # Pinecone cloud vector DB
+weaviate-client==3.21.0         # Weaviate vector search
+
+# --- DATA VALIDATION & SERIALIZATION ---
+pydantic==2.5.0                 # Type-safe data validation
+pydantic-settings==2.1.0        # Environment variable management
+
+# --- DATABASE ---
+sqlalchemy==2.0.23              # ORM & database toolkit
+psycopg2-binary==2.9.9          # PostgreSQL adapter
+alembic==1.12.1                 # Database migrations
+
+# --- CONFIGURATION MANAGEMENT ---
+python-dotenv==1.0.0            # Load .env files
+pyyaml==6.0.1                   # YAML parsing for config
+
+# --- BACKGROUND JOBS & SCHEDULING ---
+apscheduler==3.10.4             # Job scheduling (stable version)
+redis==5.0.1                    # Redis client (for task queue)
+celery==5.3.4                   # Task queue (for scaling)
+
+# --- AUTHENTICATION & SECURITY ---
+python-jose[cryptography]==3.3.0  # JWT token handling
+passlib[bcrypt]==1.7.4          # Password hashing
+cryptography==41.0.7            # Encryption library
+
+# --- RATE LIMITING & THROTTLING ---
+slowapi==0.1.9                  # Rate limiting for FastAPI
+
+# --- LOGGING & MONITORING ---
+python-json-logger==2.0.7       # JSON structured logging
+prometheus-client==0.19.0       # Prometheus metrics
+
+# --- DEVELOPMENT & TESTING ---
+pytest==7.4.3                   # Testing framework
+pytest-asyncio==0.21.1          # Async test support
+pytest-cov==4.1.0               # Coverage reports
+black==23.11.0                  # Code formatter
+flake8==6.1.0                   # Linter
+mypy==1.7.0                     # Static type checker
+isort==5.13.2                   # Import sorting
+
+# --- UTILITIES ---
+python-dateutil==2.8.2          # Date utilities
+pytz==2023.3                    # Timezone support
+tenacity==8.2.3                 # Retry library with backoff

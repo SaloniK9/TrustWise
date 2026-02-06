@@ -1,0 +1,35 @@
+{
+  "databases": [
+    {
+      "name": "internal_postgres",
+      "type": "sql",
+      "trust_score": 0.95
+    }
+  ],
+
+  "web_sources": [
+    {
+      "name": "arxiv",
+      "domain": "arxiv.org",
+      "trust_score": 0.97
+    },
+    {
+      "name": "ieee",
+      "domain": "ieee.org",
+      "trust_score": 0.96
+    },
+    {
+      "name": "nist",
+      "domain": "nist.gov",
+      "trust_score": 0.99
+    }
+  ],
+
+  "apis": [
+    {
+      "name": "world_bank",
+      "base_url": "api.worldbank.org",
+      "trust_score": 0.94
+    }
+  ]
+}
