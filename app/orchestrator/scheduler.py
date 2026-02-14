@@ -5,6 +5,7 @@ from app.agents.db_agent import db_agent
 from app.agents.vector_agent import vector_agent
 from app.agents.web_agent import web_agent
 from app.agents.research_agent import research_agent
+from app.monitoring import metrics
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,11 @@ class Scheduler:
             List of results from all agents
         """
         logger.info(f"Scheduler: Dispatching {len(tasks)} tasks in parallel")
+        # metrics: dispatched
+        try:
+            metrics.increment_tasks_dispatched(len(tasks))
+        except Exception:
+            pass
         
         # Create coroutines for all tasks
         coroutines = []
@@ -74,6 +80,10 @@ class Scheduler:
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
                     logger.error(f"Task {i} failed: {result}")
+                    try:
+                        metrics.increment_tasks_failed(1)
+                    except Exception:
+                        pass
                     clean_results.append({
                         "status": "failed",
                         "error": str(result),

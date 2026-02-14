@@ -4,7 +4,7 @@ from uuid import UUID
 from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from slowapi import Limiter
@@ -12,7 +12,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from app.orchestrator.orchestrator import Orchestrator
-from app.database.database import get_db, engine
+from app.orchestrator.task_queue import TaskQueue
+from app.database.database import get_db, engine, SessionLocal
 from app.database.models import Base, Job, ExtractedData, JobStatus
 from app.schemas import (
     JobCreateRequest,
@@ -20,9 +21,11 @@ from app.schemas import (
     JobDetailResponse,
     JobListResponse,
     HealthResponse,
+    ScheduleRequest,
     ErrorResponse,
 )
 from app.extractors.engine import ExtractionEngine
+from app.monitoring import metrics
 
 # Setup logging
 logging.basicConfig(
@@ -44,6 +47,9 @@ app.state.limiter = limiter
 
 # Initialize orchestrator
 orchestrator = Orchestrator()
+
+# Initialize Phase 3 task queue
+task_queue = TaskQueue()
 
 # Initialize extraction engine (Phase 2)
 extraction_engine = None
@@ -73,12 +79,54 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to create database tables: {e}", exc_info=True)
         raise
+    # Start task queue scheduler
+    try:
+        task_queue.start()
+    except Exception as e:
+        logger.error(f"Failed to start task queue: {e}")
+
+    # Phase 3: create a persistent job record for each trusted source and schedule recurring runs
+    try:
+        db = SessionLocal()
+        # Default recurring interval: 24 hours (in seconds)
+        default_interval = 24 * 60 * 60
+
+        # Get per-source intervals if provided in config
+        source_intervals = orchestrator.get_sources_with_intervals()
+
+        # Build set of all source names (to ensure we create jobs for sources
+        # even if no interval was specified)
+        for name in orchestrator.get_source_names():
+            # ensure a job record exists for the source
+            existing = db.query(Job).filter(Job.source_name == name).first()
+            if not existing:
+                j = Job(source_name=name, status=JobStatus.PENDING)
+                db.add(j)
+                db.commit()
+                db.refresh(j)
+                job_id = str(j.id)
+            else:
+                job_id = str(existing.id)
+
+            interval = source_intervals.get(name, default_interval)
+
+            # schedule a recurring extraction job (replace existing schedule if present)
+            task_queue.schedule_job(job_id, interval_seconds=interval, metadata={"source": name})
+
+        db.close()
+        logger.info("Phase 3: Scheduled recurring jobs for trusted sources")
+    except Exception as e:
+        logger.error(f"Phase 3 scheduling failed: {e}")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown."""
     logger.info("TrustWise shutting down...")
+    try:
+        task_queue.shutdown()
+    except Exception:
+        pass
 
 
 # ============================================================================
@@ -103,6 +151,8 @@ async def general_exception_handler(request: Request, exc: Exception):
         status_code=500,
         content={"detail": "Internal server error"}
     )
+
+
 
 
 # ============================================================================
@@ -142,6 +192,26 @@ async def readiness(db: Session = Depends(get_db)):
     )
 
 
+@app.get("/live", response_model=HealthResponse)
+async def liveness():
+    """Liveness probe for Kubernetes/container orchestration.
+    
+    Returns 200 if app is running, 503 if scheduler is down.
+    """
+    logger.debug("Liveness check requested")
+    
+    # Check if scheduler is still running
+    if not task_queue.started:
+        raise HTTPException(status_code=503, detail="Scheduler not running")
+    
+    return HealthResponse(
+        status="live",
+        service="TrustWise Orchestrator",
+        version="0.1.0",
+        database="n/a"
+    )
+
+
 # ============================================================================
 # Job Management Endpoints
 # ============================================================================
@@ -170,11 +240,12 @@ async def create_job(
     logger.info(f"Creating job for source: {job_request.source_name}")
     
     # Validate source exists
-    if job_request.source_name not in orchestrator.trusted_sources:
+    valid_sources = orchestrator.get_source_names()
+    if job_request.source_name not in valid_sources:
         logger.warning(f"Invalid source requested: {job_request.source_name}")
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown source: {job_request.source_name}. Available sources: {list(orchestrator.trusted_sources.keys())}"
+            detail=f"Unknown source: {job_request.source_name}. Available sources: {sorted(list(valid_sources))}"
         )
     
     try:
@@ -415,6 +486,36 @@ async def start_extraction(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/jobs/{job_id}/schedule")
+@limiter.limit("50/minute")
+async def schedule_job_endpoint(
+    request: Request,
+    job_id: UUID,
+    schedule: ScheduleRequest,
+    db: Session = Depends(get_db),
+):
+    """Schedule a job to run at a given time or interval.
+
+    Provides a lightweight scheduler interface for Phase 3.
+    """
+    logger.info(f"Scheduling job {job_id} - run_at={schedule.run_at} interval={schedule.interval_seconds}")
+
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    try:
+        task_queue.schedule_job(
+            str(job_id), run_at=schedule.run_at, interval_seconds=schedule.interval_seconds, metadata=schedule.metadata
+        )
+        return {"job_id": str(job_id), "scheduled": True}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to schedule job: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to schedule job")
+
+
 @app.get("/jobs/{job_id}/extractions")
 @limiter.limit("500/minute")
 async def get_extractions(
@@ -492,6 +593,17 @@ async def extractor_health(
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=500, detail="Health check failed")
+
+
+@app.get("/metrics")
+async def metrics_endpoint():
+    """Prometheus metrics endpoint exposed for scraping."""
+    try:
+        body, content_type = metrics.metrics_as_response()
+        return Response(content=body, media_type=content_type)
+    except Exception as e:
+        logger.error(f"Failed to generate metrics: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate metrics")
 
 
 @app.post("/extractors/{extractor_type}/search")

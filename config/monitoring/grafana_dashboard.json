@@ -1,0 +1,33 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "TrustWise - Jobs & Scheduler",
+    "panels": [
+      {
+        "type": "graph",
+        "title": "Jobs Running",
+        "targets": [
+          { "expr": "trustwise_jobs_running", "legendFormat": "running" }
+        ]
+      },
+      {
+        "type": "graph",
+        "title": "Job Duration (histogram)",
+        "targets": [
+          { "expr": "histogram_quantile(0.95, sum(rate(trustwise_job_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95" }
+        ]
+      },
+      {
+        "type": "graph",
+        "title": "Tasks Dispatched / Failed",
+        "targets": [
+          { "expr": "increase(trustwise_tasks_dispatched_total[5m])", "legendFormat": "dispatched" },
+          { "expr": "increase(trustwise_tasks_failed_total[5m])", "legendFormat": "failed" }
+        ]
+      }
+    ],
+    "templating": { "list": [] },
+    "schemaVersion": 16,
+    "version": 0
+  }
+}

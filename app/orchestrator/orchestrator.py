@@ -59,6 +59,48 @@ class Orchestrator:
         except json.JSONDecodeError as e:
             logger.error(f"Invalid JSON in config: {e}")
             raise
+
+    def get_source_names(self) -> set:
+        """Return a set of all source names from the trusted sources config."""
+        names = set()
+        # config contains lists like 'web_sources', 'databases', 'apis'
+        for key, entries in self.trusted_sources.items():
+            if isinstance(entries, list):
+                for entry in entries:
+                    name = entry.get("name") or entry.get("domain")
+                    if name:
+                        names.add(name)
+        return names
+
+    def get_sources_with_intervals(self) -> dict:
+        """Return mapping of source name -> interval_seconds (if provided).
+
+        Reads optional `interval_seconds` directly on each entry or under an
+        optional `schedule` object inside the entry.
+        """
+        mapping = {}
+        for key, entries in self.trusted_sources.items():
+            if isinstance(entries, list):
+                for entry in entries:
+                    name = entry.get("name") or entry.get("domain")
+                    if not name:
+                        continue
+                    interval = None
+                    # support top-level interval or nested schedule
+                    if isinstance(entry, dict):
+                        interval = entry.get("interval_seconds")
+                        schedule = entry.get("schedule")
+                        if schedule and isinstance(schedule, dict):
+                            interval = interval or schedule.get("interval_seconds")
+
+                    if interval:
+                        try:
+                            mapping[name] = int(interval)
+                        except Exception:
+                            # ignore invalid values and skip
+                            pass
+
+        return mapping
     
     async def handle_query(self, query: str) -> Dict:
         """Process a query through the full pipeline."""

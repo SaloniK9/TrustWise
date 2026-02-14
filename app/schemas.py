@@ -71,6 +71,18 @@ class JobCreateRequest(BaseModel):
     )
 
 
+class ScheduleRequest(BaseModel):
+    """Request model for scheduling a job."""
+
+    run_at: Optional[datetime] = Field(
+        default=None, description="Schedule the job to run at this UTC datetime"
+    )
+    interval_seconds: Optional[int] = Field(
+        default=None, description="Schedule the job to run repeatedly every N seconds"
+    )
+    metadata: Optional[dict] = Field(default=None, description="Optional metadata for the job")
+
+
 # Database Health Response
 class HealthResponse(BaseModel):
     """Health check response."""
