@@ -1,0 +1,193 @@
+---
+# PersistentVolume for PostgreSQL Data
+# For minikube: hostPath, For cloud: EBS, GCE, Azure Disk, etc
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-primary-pvc
+  namespace: trustwise
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: standard  # Change for cloud provider
+
+---
+# PersistentVolumeClaim for PostgreSQL WAL Archiving
+
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-wal-archive-pvc
+  namespace: trustwise
+spec:
+  accessModes:
+    - ReadWriteMany  # Needed for multiple readers
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# PostgreSQL Primary Deployment
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-primary
+  namespace: trustwise
+  labels:
+    app: postgres
+    role: primary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+      role: primary
+  strategy:
+    type: Recreate  # Don't use RollingUpdate for stateful databases
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: primary
+    spec:
+      serviceAccountName: trustwise-sa
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: postgres
+          containerPort: 5432
+          protocol: TCP
+        env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: POSTGRES_PASSWORD
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: trustwise-config
+              key: POSTGRES_DB
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-wal-archive
+          mountPath: /var/lib/postgresql/wal_archive
+        - name: postgres-config
+          mountPath: /etc/postgresql
+          readOnly: true
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: postgres-primary-pvc
+      - name: postgres-wal-archive
+        persistentVolumeClaim:
+          claimName: postgres-wal-archive-pvc
+      - name: postgres-config
+        configMap:
+          name: postgres-config
+
+---
+# PostgreSQL Service (Primary)
+# Exposes database to other pods
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-primary
+  namespace: trustwise
+  labels:
+    app: postgres
+    role: primary
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: postgres
+    role: primary
+
+---
+# ConfigMap for PostgreSQL configuration files
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: trustwise
+data:
+  postgresql.conf: |
+    # PostgreSQL Configuration for Kubernetes
+    listen_addresses = '*'
+    port = 5432
+    max_connections = 200
+    
+    # Replication
+    wal_level = replica
+    max_wal_senders = 3
+    max_replication_slots = 3
+    wal_keep_size = 1GB
+    
+    # Persistence
+    shared_buffers = 256MB
+    effective_cache_size = 1GB
+    
+    # Checkpoints
+    checkpoint_timeout = 15min
+    checkpoint_completion_target = 0.9
+    
+    # Logging
+    logging_collector = on
+    log_min_duration_statement = 1000
+    
+  pg_hba.conf: |
+    # TYPE  DATABASE        USER            ADDRESS                 METHOD
+    local   all             all                                     trust
+    host    all             all             127.0.0.1/32            scram-sha-256
+    host    all             all             ::1/128                 scram-sha-256
+    host    replication     all             0.0.0.0/0               scram-sha-256

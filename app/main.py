@@ -26,6 +26,7 @@ from app.schemas import (
 )
 from app.extractors.engine import ExtractionEngine
 from app.monitoring import metrics
+from app import celery_routes
 
 # Setup logging
 logging.basicConfig(
@@ -44,6 +45,9 @@ app = FastAPI(
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
+
+# Include Celery routes (Phase 5A)
+app.include_router(celery_routes.router)
 
 # Initialize orchestrator
 orchestrator = Orchestrator()

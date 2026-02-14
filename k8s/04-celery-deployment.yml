@@ -1,0 +1,442 @@
+---
+# Celery Worker Deployment - Web Extractor
+# Specialized workers for web scraping tasks
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker-web
+  namespace: trustwise
+  labels:
+    app: celery
+    component: worker
+    queue: web
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: celery
+      component: worker
+      queue: web
+  template:
+    metadata:
+      labels:
+        app: celery
+        component: worker
+        queue: web
+    spec:
+      serviceAccountName: trustwise-sa
+      
+      containers:
+      - name: celery-worker
+        image: trustwise:celery-worker
+        imagePullPolicy: IfNotPresent
+        
+        command:
+        - celery
+        - -A
+        - app.celery_config
+        - worker
+        - -Q
+        - extraction.web
+        - -l
+        - info
+        - -n
+        - web@%h
+        
+        env:
+        - name: REDIS_BROKER
+          value: "redis://redis-sentinel-service:26379/0"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: DATABASE_URL
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        # Health check
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.celery_config
+            - inspect
+            - active
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: queue
+                  operator: In
+                  values:
+                  - web
+              topologyKey: kubernetes.io/hostname
+
+---
+# Celery Worker Deployment - Research Extractor
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker-research
+  namespace: trustwise
+  labels:
+    app: celery
+    component: worker
+    queue: research
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: celery
+      component: worker
+      queue: research
+  template:
+    metadata:
+      labels:
+        app: celery
+        component: worker
+        queue: research
+    spec:
+      serviceAccountName: trustwise-sa
+      
+      containers:
+      - name: celery-worker
+        image: trustwise:celery-worker
+        imagePullPolicy: IfNotPresent
+        
+        command:
+        - celery
+        - -A
+        - app.celery_config
+        - worker
+        - -Q
+        - extraction.research
+        - -l
+        - info
+        - -n
+        - research@%h
+        
+        env:
+        - name: REDIS_BROKER
+          value: "redis://redis-sentinel-service:26379/0"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: DATABASE_URL
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.celery_config
+            - inspect
+            - active
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: queue
+                  operator: In
+                  values:
+                  - research
+              topologyKey: kubernetes.io/hostname
+
+---
+# Celery Worker Deployment - Vector Extractor
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker-vector
+  namespace: trustwise
+  labels:
+    app: celery
+    component: worker
+    queue: vector
+spec:
+  replicas: 2  # Fewer due to CPU intensity
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: celery
+      component: worker
+      queue: vector
+  template:
+    metadata:
+      labels:
+        app: celery
+        component: worker
+        queue: vector
+    spec:
+      serviceAccountName: trustwise-sa
+      
+      containers:
+      - name: celery-worker
+        image: trustwise:celery-worker
+        imagePullPolicy: IfNotPresent
+        
+        command:
+        - celery
+        - -A
+        - app.celery_config
+        - worker
+        - -Q
+        - extraction.vector
+        - -l
+        - info
+        - -n
+        - vector@%h
+        - --concurrency=2  # Lower concurrency for CPU-intensive work
+        
+        env:
+        - name: REDIS_BROKER
+          value: "redis://redis-sentinel-service:26379/0"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: DATABASE_URL
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        
+        resources:
+          requests:
+            cpu: 500m  # Higher CPU needed
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.celery_config
+            - inspect
+            - active
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: queue
+                  operator: In
+                  values:
+                  - vector
+              topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: node-type
+                operator: In
+                values:
+                - compute-optimized
+
+---
+# Celery Beat Scheduler
+# Schedules periodic extraction tasks
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: trustwise
+spec:
+  replicas: 1  # Only one Beat scheduler needed
+  selector:
+    matchLabels:
+      app: celery-beat
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+    spec:
+      serviceAccountName: trustwise-sa
+      
+      containers:
+      - name: beat
+        image: trustwise:celery-worker
+        imagePullPolicy: IfNotPresent
+        
+        command:
+        - celery
+        - -A
+        - app.celery_config
+        - beat
+        - -l
+        - info
+        
+        env:
+        - name: REDIS_BROKER
+          value: "redis://redis-sentinel-service:26379/0"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: DATABASE_URL
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        
+        livenessProbe:
+          exec:
+            command:
+            - celery
+            - -A
+            - app.celery_config
+            - inspect
+            - active
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+
+---
+# Flower Monitoring Service
+# Celery task monitoring UI
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-flower
+  namespace: trustwise
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-flower
+  template:
+    metadata:
+      labels:
+        app: celery-flower
+    spec:
+      serviceAccountName: trustwise-sa
+      
+      containers:
+      - name: flower
+        image: trustwise:celery-worker
+        imagePullPolicy: IfNotPresent
+        
+        command:
+        - celery
+        - -A
+        - app.celery_config
+        - flower
+        - --port=5555
+        - --broker=redis://redis-sentinel-service:26379/0
+        
+        ports:
+        - name: http
+          containerPort: 5555
+        
+        env:
+        - name: REDIS_BROKER
+          value: "redis://redis-sentinel-service:26379/0"
+        - name: PYTHONUNBUFFERED
+          value: "1"
+        
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5555
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+---
+# Flower Service
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: celery-flower-service
+  namespace: trustwise
+  labels:
+    app: celery-flower
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5555
+    targetPort: 5555
+    name: http
+  selector:
+    app: celery-flower

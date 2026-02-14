@@ -1,0 +1,105 @@
+---
+# Kubernetes Namespace for TrustWise
+# Isolates all TrustWise resources from other namespaces
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: trustwise
+  labels:
+    name: trustwise
+
+---
+# ConfigMap: Application Configuration
+# Stores non-sensitive configuration data
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trustwise-config
+  namespace: trustwise
+data:
+  LOG_LEVEL: "info"
+  PYTHONUNBUFFERED: "1"
+  POSTGRES_DB: "trustwise_db"
+  REDIS_DB: "0"
+  REDIS_CLUSTER_ENABLED: "true"
+
+---
+# Secret: Database Credentials
+# For production: Use external secret management (Vault, AWS Secrets Manager)
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: trustwise-secrets
+  namespace: trustwise
+type: Opaque
+stringData:
+  # PostgreSQL credentials
+  POSTGRES_USER: trustwise
+  POSTGRES_PASSWORD: trustwise_secure_password_change_me
+  DATABASE_URL: postgresql://trustwise:trustwise_secure_password_change_me@postgres-primary:5432/trustwise_db
+  
+  # Redis credentials (if using ACL)
+  REDIS_PASSWORD: redis_secure_password_change_me
+  
+  # API keys (if needed)
+  # API_KEY: your_api_key_here
+
+---
+# Service Account for TrustWise Deployments
+# Used by Pods to authenticate with Kubernetes API
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trustwise-sa
+  namespace: trustwise
+
+---
+# Role: Permissions for TrustWise Service Account
+# Allows: Listing pods, reading config maps, creating events
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: trustwise-role
+  namespace: trustwise
+rules:
+  # Pod operations
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  
+  # ConfigMap access
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+  
+  # Services access
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch"]
+  
+  # Events (for logging)
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+
+---
+# RoleBinding: Connects Role to ServiceAccount
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: trustwise-rolebinding
+  namespace: trustwise
+subjects:
+  - kind: ServiceAccount
+    name: trustwise-sa
+    namespace: trustwise
+roleRef:
+  kind: Role
+  name: trustwise-role
+  apiGroup: rbac.authorization.k8s.io

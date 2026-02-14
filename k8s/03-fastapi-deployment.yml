@@ -1,0 +1,232 @@
+---
+# FastAPI Application Deployment
+# Three replicas by default, scalable via HPA
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-app
+  namespace: trustwise
+  labels:
+    app: fastapi
+    tier: api
+spec:
+  replicas: 3  # Start with 3, scale via HPA
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0  # Zero-downtime deployments
+  selector:
+    matchLabels:
+      app: fastapi
+      tier: api
+  template:
+    metadata:
+      labels:
+        app: fastapi
+        tier: api
+      annotations:
+        # Prometheus scrape configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: trustwise-sa
+      
+      # Init container to wait for database
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15-alpine
+        command:
+        - sh
+        - -c
+        - |
+          until pg_isready -h postgres-primary -U trustwise; do
+            echo "Waiting for database..."
+            sleep 2
+          done
+        env:
+        - name: PGPASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: POSTGRES_PASSWORD
+      
+      # Init container to run database migrations
+      - name: db-migrate
+        image: trustwise:latest  # Replace with your image
+        command: ["alembic", "upgrade", "head"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: DATABASE_URL
+        volumeMounts:
+        - name: migrations
+          mountPath: /app/migrations
+
+      containers:
+      - name: fastapi
+        image: trustwise:latest  # Replace with your image registry
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: trustwise-secrets
+              key: DATABASE_URL
+        - name: REDIS_BROKER
+          value: "redis://redis-sentinel-service:26379/0"  # Via Sentinel
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: trustwise-config
+              key: LOG_LEVEL
+        
+        volumeMounts:
+        - name: migrations
+          mountPath: /app/migrations
+        
+        # Resource requests/limits
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+        
+        # Startup probe (for slow starts)
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 30  # 30 * 5s = 150s max startup
+        
+        # Lifecycle hooks
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - sleep 15  # Wait for connections to drain
+      
+      # Volumes
+      volumes:
+      - name: migrations
+        emptyDir: {}
+      
+      # Pod disruption budget for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - fastapi
+              topologyKey: kubernetes.io/hostname
+      
+      # Restart policy
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+# FastAPI Service
+# Exposes FastAPI pods to other services and load balancer
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastapi-service
+  namespace: trustwise
+  labels:
+    app: fastapi
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: fastapi
+    tier: api
+
+---
+# Ingress: External access to FastAPI
+# With TLS termination and path-based routing
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fastapi-ingress
+  namespace: trustwise
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Requires cert-manager
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.trustwise.local
+    secretName: fastapi-tls
+  rules:
+  - host: api.trustwise.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fastapi-service
+            port:
+              number: 8000
+
+---
+# PodDisruptionBudget: Ensures availability during disruptions
+
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fastapi-pdb
+  namespace: trustwise
+spec:
+  minAvailable: 2  # At least 2 FastAPI pods must be running
+  selector:
+    matchLabels:
+      app: fastapi
+      tier: api
