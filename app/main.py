@@ -175,6 +175,12 @@ async def health_check():
     )
 
 
+@app.get("/health", response_model=HealthResponse)
+async def health_check_alias():
+    """Compatibility health check endpoint for load balancers."""
+    return await health_check()
+
+
 @app.get("/ready", response_model=HealthResponse)
 async def readiness(db: Session = Depends(get_db)):
     """Readiness check endpoint with database verification."""

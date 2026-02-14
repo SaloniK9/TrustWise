@@ -1,29 +1,9 @@
 networks:
   trustwise-network:
     driver: bridge
-version: '3.8'
+version: "3.8"
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: trustwise-postgres
-    environment:
-      POSTGRES_USER: trustwise
-      POSTGRES_PASSWORD: trustwise
-      POSTGRES_DB: trustwise_dev
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trustwise"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - trustwise-network
-    restart: unless-stopped
-
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: trustwise-pgadmin
@@ -33,9 +13,11 @@ services:
     ports:
       - "5050:80"
     depends_on:
-      - postgres
+      - postgres-primary
     networks:
-      - trustwise-network
+      trustwise-network:
+        aliases:
+          - redis
     restart: unless-stopped
 
   prometheus:
@@ -48,17 +30,16 @@ services:
       - ./config/monitoring/prometheus_rules.yml:/etc/prometheus/rules/alert_rules.yml
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
     networks:
       - trustwise-network
 
-
   # Phase 5A: Distributed Job Execution (Celery + Redis)
   # Phase 5B: High Availability with Redis Sentinel
-  
+
   redis-master:
     image: redis:7-alpine
     container_name: trustwise-redis-master
@@ -183,26 +164,6 @@ services:
       - trustwise-network
     restart: unless-stopped
 
-  # Note: For Phase 5A compatibility, keep redis as alias to redis-master
-  redis:
-    image: redis:7-alpine
-    container_name: trustwise-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_master_data:/data
-    command: redis-server
-    depends_on:
-      - redis-master
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - trustwise-network
-    restart: unless-stopped
-
   # Phase 5B: HAProxy Load Balancer for API Gateway
   haproxy:
     image: haproxy:2.8-alpine
@@ -217,8 +178,18 @@ services:
     command: haproxy -f /usr/local/etc/haproxy/haproxy.cfg
     depends_on:
       - fastapi
+      - fastapi-2
+      - fastapi-3
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8404/stats"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8404/stats",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -235,10 +206,60 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     environment:
       DATABASE_URL: postgresql://trustwise:trustwise@postgres-primary:5432/trustwise_dev
-      REDIS_BROKER: redis-master:6379/0
-      REDIS_BACKEND: redis-master:6379/1
+      REDIS_BROKER: sentinel://sentinel-1:26379/0
+      REDIS_BACKEND: sentinel://sentinel-1:26379/1
+      REDIS_SENTINEL_HOSTS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_MASTER: mymaster
     ports:
       - "8000:8000"
+    depends_on:
+      - postgres-primary
+      - redis-master
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trustwise-network
+    restart: unless-stopped
+
+  fastapi-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trustwise-fastapi-2
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql://trustwise:trustwise@postgres-primary:5432/trustwise_dev
+      REDIS_BROKER: sentinel://sentinel-1:26379/0
+      REDIS_BACKEND: sentinel://sentinel-1:26379/1
+      REDIS_SENTINEL_HOSTS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_MASTER: mymaster
+    depends_on:
+      - postgres-primary
+      - redis-master
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - trustwise-network
+    restart: unless-stopped
+
+  fastapi-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trustwise-fastapi-3
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    environment:
+      DATABASE_URL: postgresql://trustwise:trustwise@postgres-primary:5432/trustwise_dev
+      REDIS_BROKER: sentinel://sentinel-1:26379/0
+      REDIS_BACKEND: sentinel://sentinel-1:26379/1
+      REDIS_SENTINEL_HOSTS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_MASTER: mymaster
     depends_on:
       - postgres-primary
       - redis-master
@@ -264,6 +285,7 @@ services:
     volumes:
       - ./config/postgresql/postgresql-primary.conf:/etc/postgresql/postgresql.conf
       - ./config/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf
+      - ./config/postgresql/init:/docker-entrypoint-initdb.d
       - postgres_primary_data:/var/lib/postgresql/data
       - postgres_wal_archive:/var/lib/postgresql/wal_archive
     command:
@@ -289,6 +311,7 @@ services:
       POSTGRES_PASSWORD: trustwise
       POSTGRES_DB: trustwise_dev
       PGUSER: trustwise
+      PGPASSWORD: replication_password
     ports:
       - "5433:5432"
     volumes:
@@ -296,9 +319,7 @@ services:
       - ./config/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf
       - postgres_standby1_data:/var/lib/postgresql/data
     command: |
-      sh -c 'pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U trustwise -v -P &&
-             echo "standby_mode = on" >> /var/lib/postgresql/data/recovery.conf &&
-             echo "primary_conninfo = '\''host=postgres-primary port=5432 user=trustwise password=trustwise'\''" >> /var/lib/postgresql/data/recovery.conf &&
+      sh -c 'pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U replication -v -P -R &&
              postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf'
     depends_on:
       - postgres-primary
@@ -319,6 +340,7 @@ services:
       POSTGRES_PASSWORD: trustwise
       POSTGRES_DB: trustwise_dev
       PGUSER: trustwise
+      PGPASSWORD: replication_password
     ports:
       - "5434:5432"
     volumes:
@@ -326,9 +348,7 @@ services:
       - ./config/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf
       - postgres_standby2_data:/var/lib/postgresql/data
     command: |
-      sh -c 'pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U trustwise -v -P &&
-             echo "standby_mode = on" >> /var/lib/postgresql/data/recovery.conf &&
-             echo "primary_conninfo = '\''host=postgres-primary port=5432 user=trustwise password=trustwise'\''" >> /var/lib/postgresql/data/recovery.conf &&
+      sh -c 'pg_basebackup -h postgres-primary -D /var/lib/postgresql/data -U replication -v -P -R &&
              postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf'
     depends_on:
       - postgres-primary
@@ -371,8 +391,10 @@ services:
     container_name: trustwise-celery-web
     command: celery -A app.celery_config worker -l info -Q extraction.web -n web@%h
     environment:
-      REDIS_BROKER: redis://redis-master:6379/0
-      REDIS_BACKEND: redis://redis-master:6379/1
+      REDIS_BROKER: sentinel://sentinel-1:26379/0
+      REDIS_BACKEND: sentinel://sentinel-1:26379/1
+      REDIS_SENTINEL_HOSTS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_MASTER: mymaster
       DATABASE_URL: postgresql://trustwise:trustwise@postgres-primary:5432/trustwise_dev
     depends_on:
       - sentinel-1
@@ -390,8 +412,10 @@ services:
     container_name: trustwise-celery-research
     command: celery -A app.celery_config worker -l info -Q extraction.research -n research@%h
     environment:
-      REDIS_BROKER: redis://redis-master:6379/0
-      REDIS_BACKEND: redis://redis-master:6379/1
+      REDIS_BROKER: sentinel://sentinel-1:26379/0
+      REDIS_BACKEND: sentinel://sentinel-1:26379/1
+      REDIS_SENTINEL_HOSTS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_MASTER: mymaster
       DATABASE_URL: postgresql://trustwise:trustwise@postgres-primary:5432/trustwise_dev
     depends_on:
       - sentinel-1
@@ -409,8 +433,10 @@ services:
     container_name: trustwise-celery-vector
     command: celery -A app.celery_config worker -l info -Q extraction.vector -n vector@%h
     environment:
-      REDIS_BROKER: redis://redis-master:6379/0
-      REDIS_BACKEND: redis://redis-master:6379/1
+      REDIS_BROKER: sentinel://sentinel-1:26379/0
+      REDIS_BACKEND: sentinel://sentinel-1:26379/1
+      REDIS_SENTINEL_HOSTS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_MASTER: mymaster
       DATABASE_URL: postgresql://trustwise:trustwise@postgres-primary:5432/trustwise_dev
     depends_on:
       - sentinel-1
@@ -428,8 +454,10 @@ services:
     container_name: trustwise-celery-beat
     command: celery -A app.celery_config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     environment:
-      REDIS_BROKER: redis://redis-master:6379/0
-      REDIS_BACKEND: redis://redis-master:6379/1
+      REDIS_BROKER: sentinel://sentinel-1:26379/0
+      REDIS_BACKEND: sentinel://sentinel-1:26379/1
+      REDIS_SENTINEL_HOSTS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_MASTER: mymaster
       DATABASE_URL: postgresql://trustwise:trustwise@postgres-primary:5432/trustwise_dev
     depends_on:
       - sentinel-1
@@ -447,8 +475,10 @@ services:
     container_name: trustwise-celery-flower
     command: celery -A app.celery_config flower --port=5555
     environment:
-      REDIS_BROKER: redis://redis-master:6379/0
-      REDIS_BACKEND: redis://redis-master:6379/1
+      REDIS_BROKER: sentinel://sentinel-1:26379/0
+      REDIS_BACKEND: sentinel://sentinel-1:26379/1
+      REDIS_SENTINEL_HOSTS: sentinel-1:26379,sentinel-2:26379,sentinel-3:26379
+      REDIS_SENTINEL_MASTER: mymaster
       DATABASE_URL: postgresql://trustwise:trustwise@postgres-primary:5432/trustwise_dev
     ports:
       - "5555:5555"
@@ -468,7 +498,7 @@ volumes:
   sentinel1_data:
   sentinel2_data:
   sentinel3_data:
-  
+
   # PostgreSQL HA
   postgres_data:
   postgres_primary_data:
@@ -476,7 +506,7 @@ volumes:
   postgres_standby2_data:
   postgres_legacy_data:
   postgres_wal_archive:
-  
+
   # Monitoring
   prometheus_data:
   grafana_data:

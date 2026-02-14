@@ -21,8 +21,34 @@ app = Celery("trustwise")
 
 # Load config from environment
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", REDIS_URL)
-CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", REDIS_URL)
+REDIS_BROKER = os.getenv("REDIS_BROKER", os.getenv("CELERY_BROKER_URL", REDIS_URL))
+REDIS_BACKEND = os.getenv("REDIS_BACKEND", os.getenv("CELERY_RESULT_BACKEND", REDIS_URL))
+
+REDIS_SENTINEL_HOSTS = os.getenv("REDIS_SENTINEL_HOSTS", "")
+REDIS_SENTINEL_MASTER = os.getenv("REDIS_SENTINEL_MASTER", "mymaster")
+
+sentinel_nodes = []
+if REDIS_SENTINEL_HOSTS:
+    for entry in REDIS_SENTINEL_HOSTS.split(","):
+        host_port = entry.strip()
+        if not host_port:
+            continue
+        if ":" in host_port:
+            host, port_str = host_port.split(":", 1)
+            sentinel_nodes.append((host.strip(), int(port_str)))
+        else:
+            sentinel_nodes.append((host_port, 26379))
+
+CELERY_BROKER_URL = REDIS_BROKER
+CELERY_RESULT_BACKEND = REDIS_BACKEND
+
+if sentinel_nodes and not CELERY_BROKER_URL.startswith("sentinel://"):
+    primary_host, primary_port = sentinel_nodes[0]
+    CELERY_BROKER_URL = f"sentinel://{primary_host}:{primary_port}/0"
+
+if sentinel_nodes and not CELERY_RESULT_BACKEND.startswith("sentinel://"):
+    primary_host, primary_port = sentinel_nodes[0]
+    CELERY_RESULT_BACKEND = f"sentinel://{primary_host}:{primary_port}/1"
 
 # Configure Celery
 app.conf.update(
@@ -39,6 +65,16 @@ app.conf.update(
     worker_prefetch_multiplier=1,  # Process one task at a time
     worker_max_tasks_per_child=1000,  # Recycle worker after 1000 tasks
 )
+
+if sentinel_nodes:
+    app.conf.broker_transport_options = {
+        "master_name": REDIS_SENTINEL_MASTER,
+        "sentinels": sentinel_nodes,
+    }
+    app.conf.result_backend_transport_options = {
+        "master_name": REDIS_SENTINEL_MASTER,
+        "sentinels": sentinel_nodes,
+    }
 
 # Define task routing
 default_exchange = Exchange("trustwise", type="direct")
