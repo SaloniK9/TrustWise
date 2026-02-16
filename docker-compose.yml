@@ -46,9 +46,8 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./config/redis/redis-master.conf:/usr/local/etc/redis/redis.conf
       - redis_master_data:/data
-    command: redis-server /usr/local/etc/redis/redis.conf
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -283,17 +282,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./config/postgresql/postgresql-primary.conf:/etc/postgresql/postgresql.conf
-      - ./config/postgresql/pg_hba.conf:/etc/postgresql/pg_hba.conf
-      - ./config/postgresql/init:/docker-entrypoint-initdb.d
       - postgres_primary_data:/var/lib/postgresql/data
-      - postgres_wal_archive:/var/lib/postgresql/wal_archive
-    command:
-      - postgres
-      - -c
-      - config_file=/etc/postgresql/postgresql.conf
-      - -c
-      - hba_file=/etc/postgresql/pg_hba.conf
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U trustwise -h localhost"]
       interval: 10s
