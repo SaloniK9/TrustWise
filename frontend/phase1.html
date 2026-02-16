@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrustWise Phase 1 - Query Planning & Execution</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1600px;
+        margin: 0 auto;
+      }
+
+      header {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        margin-bottom: 30px;
+        text-align: center;
+      }
+
+      h1 {
+        color: #667eea;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .subtitle {
+        color: #666;
+        font-size: 1.1em;
+      }
+
+      .phase-badge {
+        display: inline-block;
+        background: #ffa502;
+        color: white;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        font-weight: 600;
+        margin-top: 10px;
+      }
+
+      .workflow {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 30px;
+        margin-bottom: 30px;
+      }
+
+      .card {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      .card h2 {
+        color: #333;
+        margin-bottom: 20px;
+        font-size: 1.5em;
+        border-bottom: 2px solid #667eea;
+        padding-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .step-number {
+        background: #667eea;
+        color: white;
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+      }
+
+      .query-section {
+        display: grid;
+        gap: 20px;
+      }
+
+      textarea {
+        width: 100%;
+        padding: 15px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 1em;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 100px;
+        transition: border-color 0.3s;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 8px;
+        font-size: 1.1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+        width: 100%;
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .examples {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+      }
+
+      .examples h4 {
+        color: #555;
+        margin-bottom: 10px;
+        font-size: 0.9em;
+      }
+
+      .example-item {
+        background: white;
+        padding: 10px;
+        margin: 5px 0;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 0.9em;
+        border-left: 3px solid #667eea;
+        transition: all 0.2s;
+      }
+
+      .example-item:hover {
+        background: #e3e8ff;
+        transform: translateX(5px);
+      }
+
+      .json-container {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 20px;
+        border-radius: 8px;
+        font-family: "Courier New", monospace;
+        font-size: 0.9em;
+        overflow-x: auto;
+        max-height: 500px;
+        overflow-y: auto;
+      }
+
+      .json-key {
+        color: #9cdcfe;
+      }
+
+      .json-string {
+        color: #ce9178;
+      }
+
+      .json-number {
+        color: #b5cea8;
+      }
+
+      .json-boolean {
+        color: #569cd6;
+      }
+
+      .task-list {
+        display: grid;
+        gap: 15px;
+      }
+
+      .task-item {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+      }
+
+      .task-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .task-title {
+        font-weight: 600;
+        color: #333;
+        font-size: 1.1em;
+      }
+
+      .task-status {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 600;
+      }
+
+      .status-pending {
+        background: #ffeaa7;
+        color: #d63031;
+      }
+
+      .status-running {
+        background: #74b9ff;
+        color: #0984e3;
+      }
+
+      .status-success {
+        background: #55efc4;
+        color: #00b894;
+      }
+
+      .status-failed {
+        background: #ff7675;
+        color: #d63031;
+      }
+
+      .task-details {
+        font-size: 0.9em;
+        color: #666;
+        margin-top: 5px;
+      }
+
+      .task-prompt {
+        background: white;
+        padding: 12px;
+        border-radius: 5px;
+        margin-top: 10px;
+        font-size: 0.9em;
+        font-style: italic;
+        border-left: 3px solid #ffa502;
+      }
+
+      .raw-data {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 10px;
+        font-family: "Courier New", monospace;
+        font-size: 0.85em;
+        overflow-x: auto;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .empty-state {
+        text-align: center;
+        color: #999;
+        padding: 40px;
+        font-size: 1.1em;
+      }
+
+      .loading {
+        text-align: center;
+        color: #667eea;
+        font-weight: 600;
+        padding: 20px;
+      }
+
+      .loading::after {
+        content: "...";
+        animation: dots 1.5s steps(4, end) infinite;
+      }
+
+      @keyframes dots {
+        0%,
+        20% {
+          content: "";
+        }
+        40% {
+          content: ".";
+        }
+        60% {
+          content: "..";
+        }
+        80%,
+        100% {
+          content: "...";
+        }
+      }
+
+      .success-message {
+        background: #55efc4;
+        color: #00b894;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+
+      .error-message {
+        background: #ff7675;
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+
+      .info-box {
+        background: #e3e8ff;
+        border-left: 4px solid #667eea;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 15px 0;
+      }
+
+      .info-box h4 {
+        color: #667eea;
+        margin-bottom: 8px;
+      }
+
+      .info-box ul {
+        margin-left: 20px;
+        color: #555;
+      }
+
+      .info-box li {
+        margin: 5px 0;
+      }
+
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #667eea;
+        border-radius: 10px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px;
+      }
+
+      @media (max-width: 1200px) {
+        .grid-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🛡️ TrustWise</h1>
+        <p class="subtitle">Trust-First Agent-Based Information System</p>
+        <span class="phase-badge">Phase 1: Planning & Execution</span>
+      </header>
+
+      <!-- Step 1: Query Input -->
+      <div class="card">
+        <h2><span class="step-number">1</span> Enter Your Query</h2>
+        <div class="query-section">
+          <div id="message"></div>
+          <textarea
+            id="queryInput"
+            placeholder="Enter your natural language query...&#10;Example: Give me weekly tech updates on AI and cybersecurity from trusted sources"
+          ></textarea>
+          <button id="submitQuery" onclick="submitQuery()">
+            Generate Execution Plan
+          </button>
+
+          <div class="examples">
+            <h4>📝 Example Queries:</h4>
+            <div
+              class="example-item"
+              onclick="
+                setQuery(
+                  'Give me weekly tech updates on AI and cybersecurity from trusted sources',
+                )
+              "
+            >
+              Give me weekly tech updates on AI and cybersecurity from trusted
+              sources
+            </div>
+            <div
+              class="example-item"
+              onclick="
+                setQuery(
+                  'Find the latest research papers on machine learning published this month',
+                )
+              "
+            >
+              Find the latest research papers on machine learning published this
+              month
+            </div>
+            <div
+              class="example-item"
+              onclick="
+                setQuery(
+                  'What are the recent developments in quantum computing and blockchain technology?',
+                )
+              "
+            >
+              What are the recent developments in quantum computing and
+              blockchain technology?
+            </div>
+          </div>
+
+          <div class="info-box">
+            <h4>Phase 1 Flow:</h4>
+            <ul>
+              <li>
+                LLM converts your query into a structured JSON execution plan
+              </li>
+              <li>
+                Plan defines: goal, domains, time range, source types, and tasks
+              </li>
+              <li>
+                Each task specifies: which agent, source type, and task-specific
+                prompt
+              </li>
+              <li>Agents collect raw data without reasoning or validation</li>
+              <li>All data and plans are auditable and reproducible</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Step 2: Execution Plan -->
+        <div class="card">
+          <h2><span class="step-number">2</span> Execution Plan (JSON)</h2>
+          <div id="planContainer">
+            <div class="empty-state">
+              Submit a query to generate an execution plan
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Task Breakdown -->
+        <div class="card">
+          <h2><span class="step-number">3</span> Task Breakdown</h2>
+          <div id="tasksContainer">
+            <div class="empty-state">No tasks yet</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: Agent Execution Results -->
+      <div class="card">
+        <h2><span class="step-number">4</span> Agent Execution & Raw Data</h2>
+        <div id="resultsContainer">
+          <div class="empty-state">Execute tasks to see results</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentPlan = null;
+      let currentSessionId = null;
+
+      function setQuery(text) {
+        document.getElementById("queryInput").value = text;
+      }
+
+      function showMessage(message, isError = false) {
+        const msgDiv = document.getElementById("message");
+        msgDiv.innerHTML = `<div class="${isError ? "error-message" : "success-message"}">${message}</div>`;
+        setTimeout(() => {
+          msgDiv.innerHTML = "";
+        }, 5000);
+      }
+
+      async function submitQuery() {
+        const query = document.getElementById("queryInput").value.trim();
+        if (!query) {
+          showMessage("Please enter a query", true);
+          return;
+        }
+
+        const button = document.getElementById("submitQuery");
+        button.disabled = true;
+        button.textContent = "Generating Plan...";
+
+        try {
+          // Call API to generate plan
+          const response = await fetch("http://localhost:8000/api/v1/plan", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ query }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to generate plan");
+          }
+
+          const data = await response.json();
+          currentPlan = data.plan;
+          currentSessionId = data.session_id;
+
+          displayPlan(currentPlan);
+          displayTasks(currentPlan.tasks);
+          showMessage("✓ Execution plan generated successfully!");
+
+          // Auto-execute tasks
+          setTimeout(() => executeTasks(), 1000);
+        } catch (error) {
+          showMessage(`Error: ${error.message}`, true);
+          console.error(error);
+        } finally {
+          button.disabled = false;
+          button.textContent = "Generate Execution Plan";
+        }
+      }
+
+      function displayPlan(plan) {
+        const container = document.getElementById("planContainer");
+        const formatted = JSON.stringify(plan, null, 2);
+        container.innerHTML = `<pre class="json-container">${syntaxHighlight(formatted)}</pre>`;
+      }
+
+      function syntaxHighlight(json) {
+        json = json
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+        return json.replace(
+          /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+          function (match) {
+            let cls = "json-number";
+            if (/^"/.test(match)) {
+              if (/:$/.test(match)) {
+                cls = "json-key";
+              } else {
+                cls = "json-string";
+              }
+            } else if (/true|false/.test(match)) {
+              cls = "json-boolean";
+            } else if (/null/.test(match)) {
+              cls = "json-null";
+            }
+            return '<span class="' + cls + '">' + match + "</span>";
+          },
+        );
+      }
+
+      function displayTasks(tasks) {
+        const container = document.getElementById("tasksContainer");
+        container.innerHTML = tasks
+          .map(
+            (task, index) => `
+                <div class="task-item" id="task-${index}">
+                    <div class="task-header">
+                        <span class="task-title">Task ${index + 1}: ${task.agent_type}</span>
+                        <span class="task-status status-pending" id="status-${index}">PENDING</span>
+                    </div>
+                    <div class="task-details">
+                        <strong>Source:</strong> ${task.source_type} | 
+                        <strong>Agent:</strong> ${task.agent_type}
+                    </div>
+                    <div class="task-prompt">
+                        <strong>Prompt:</strong> ${task.prompt}
+                    </div>
+                    <div id="result-${index}"></div>
+                </div>
+            `,
+          )
+          .join("");
+      }
+
+      async function executeTasks() {
+        if (!currentPlan || !currentSessionId) return;
+
+        const container = document.getElementById("resultsContainer");
+        container.innerHTML = '<div class="loading">Executing tasks</div>';
+
+        try {
+          const response = await fetch("http://localhost:8000/api/v1/execute", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              session_id: currentSessionId,
+              plan: currentPlan,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to execute tasks");
+          }
+
+          const data = await response.json();
+          displayResults(data.results);
+        } catch (error) {
+          container.innerHTML = `<div class="error-message">Execution failed: ${error.message}</div>`;
+          console.error(error);
+        }
+      }
+
+      function displayResults(results) {
+        const container = document.getElementById("resultsContainer");
+
+        container.innerHTML = results
+          .map((result, index) => {
+            // Update task status
+            const statusEl = document.getElementById(`status-${index}`);
+            if (statusEl) {
+              statusEl.className = `task-status status-${result.status}`;
+              statusEl.textContent = result.status.toUpperCase();
+            }
+
+            // Add raw data to task
+            const resultEl = document.getElementById(`result-${index}`);
+            if (resultEl && result.data) {
+              resultEl.innerHTML = `<div class="raw-data">${JSON.stringify(result.data, null, 2)}</div>`;
+            }
+
+            return `
+                    <div class="task-item">
+                        <div class="task-header">
+                            <span class="task-title">${result.agent} [${result.source}]</span>
+                            <span class="task-status status-${result.status}">${result.status.toUpperCase()}</span>
+                        </div>
+                        <div class="raw-data">${JSON.stringify(result.data || result.error, null, 2)}</div>
+                    </div>
+                `;
+          })
+          .join("");
+      }
+    </script>
+  </body>
+</html>

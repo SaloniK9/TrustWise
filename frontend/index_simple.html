@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrustWise - AI Information System</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      header {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        margin-bottom: 30px;
+        text-align: center;
+      }
+
+      h1 {
+        color: #667eea;
+        font-size: 3em;
+        margin-bottom: 10px;
+      }
+
+      .subtitle {
+        color: #666;
+        font-size: 1.2em;
+      }
+
+      .search-card {
+        background: white;
+        padding: 40px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        margin-bottom: 30px;
+      }
+
+      .search-box {
+        display: flex;
+        gap: 15px;
+        align-items: stretch;
+      }
+
+      textarea {
+        flex: 1;
+        padding: 20px;
+        border: 2px solid #ddd;
+        border-radius: 10px;
+        font-size: 1.1em;
+        font-family: inherit;
+        resize: vertical;
+        min-height: 80px;
+        transition: border-color 0.3s;
+      }
+
+      textarea:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 20px 40px;
+        border-radius: 10px;
+        font-size: 1.2em;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+        min-width: 150px;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+      }
+
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .examples {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 10px;
+      }
+
+      .example-chip {
+        background: #f8f9fa;
+        padding: 12px 18px;
+        border-radius: 25px;
+        cursor: pointer;
+        font-size: 0.9em;
+        text-align: center;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+      }
+
+      .example-chip:hover {
+        background: #e3e8ff;
+        border-color: #667eea;
+        transform: translateY(-2px);
+      }
+
+      .message {
+        padding: 15px 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        font-weight: 500;
+      }
+
+      .success {
+        background: #d4edda;
+        color: #155724;
+        border-left: 4px solid #28a745;
+      }
+
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+        border-left: 4px solid #dc3545;
+      }
+
+      .loading {
+        background: #fff3cd;
+        color: #856404;
+        border-left: 4px solid #ffc107;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+      }
+
+      .spinner {
+        width: 20px;
+        height: 20px;
+        border: 3px solid #ffc107;
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .results-card {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        display: none;
+      }
+
+      .results-card.show {
+        display: block;
+      }
+
+      .results-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+        padding-bottom: 15px;
+        border-bottom: 2px solid #667eea;
+      }
+
+      .results-header h2 {
+        color: #333;
+        font-size: 1.8em;
+      }
+
+      .results-count {
+        background: #667eea;
+        color: white;
+        padding: 8px 20px;
+        border-radius: 20px;
+        font-weight: 600;
+      }
+
+      .results-grid {
+        display: grid;
+        gap: 25px;
+      }
+
+      .result-item {
+        background: #f8f9fa;
+        padding: 25px;
+        border-radius: 12px;
+        border-left: 5px solid #667eea;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .result-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+
+      .source-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: white;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.9em;
+        color: #667eea;
+      }
+
+      .result-content {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-top: 15px;
+      }
+
+      .result-title {
+        font-size: 1.2em;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 10px;
+      }
+
+      .result-text {
+        color: #555;
+        line-height: 1.6;
+        margin-bottom: 15px;
+      }
+
+      .result-meta {
+        display: flex;
+        gap: 20px;
+        font-size: 0.85em;
+        color: #888;
+        padding-top: 15px;
+        border-top: 1px solid #eee;
+      }
+
+      .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #999;
+      }
+
+      .empty-state-icon {
+        font-size: 4em;
+        margin-bottom: 20px;
+      }
+
+      .empty-state-text {
+        font-size: 1.2em;
+      }
+
+      @media (max-width: 768px) {
+        .search-box {
+          flex-direction: column;
+        }
+
+        h1 {
+          font-size: 2em;
+        }
+
+        .examples {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🛡️ TrustWise</h1>
+        <p class="subtitle">AI-Powered Information Retrieval System</p>
+      </header>
+
+      <div class="search-card">
+        <div id="message"></div>
+
+        <div class="search-box">
+          <textarea
+            id="queryInput"
+            placeholder="Ask me anything... e.g., 'Give me weekly tech updates on AI and cybersecurity'"
+          ></textarea>
+          <button id="searchBtn" onclick="executeQuery()">🔍 Search</button>
+        </div>
+
+        <div class="examples">
+          <div
+            class="example-chip"
+            onclick="
+              setQuery(
+                'Give me weekly tech updates on AI and cybersecurity from trusted sources',
+              )
+            "
+          >
+            📰 Weekly tech updates on AI & cybersecurity
+          </div>
+          <div
+            class="example-chip"
+            onclick="
+              setQuery('Find the latest research papers on machine learning')
+            "
+          >
+            📚 Latest ML research papers
+          </div>
+          <div
+            class="example-chip"
+            onclick="
+              setQuery('What are recent developments in quantum computing?')
+            "
+          >
+            ⚛️ Quantum computing developments
+          </div>
+        </div>
+      </div>
+
+      <div id="resultsCard" class="results-card">
+        <div class="results-header">
+          <h2>Results</h2>
+          <span class="results-count" id="resultsCount">0 items</span>
+        </div>
+        <div id="resultsContainer"></div>
+      </div>
+    </div>
+
+    <script>
+      function setQuery(text) {
+        document.getElementById("queryInput").value = text;
+      }
+
+      function showMessage(text, type = "loading") {
+        const msgDiv = document.getElementById("message");
+
+        if (type === "loading") {
+          msgDiv.innerHTML = `
+                    <div class="message loading">
+                        <div class="spinner"></div>
+                        <span>${text}</span>
+                    </div>
+                `;
+        } else if (type === "success") {
+          msgDiv.innerHTML = `<div class="message success">${text}</div>`;
+          setTimeout(() => (msgDiv.innerHTML = ""), 5000);
+        } else if (type === "error") {
+          msgDiv.innerHTML = `<div class="message error">${text}</div>`;
+          setTimeout(() => (msgDiv.innerHTML = ""), 8000);
+        }
+      }
+
+      function hideMessage() {
+        document.getElementById("message").innerHTML = "";
+      }
+
+      async function executeQuery() {
+        const query = document.getElementById("queryInput").value.trim();
+
+        if (!query) {
+          showMessage("⚠️ Please enter a query", "error");
+          return;
+        }
+
+        const searchBtn = document.getElementById("searchBtn");
+        searchBtn.disabled = true;
+        searchBtn.textContent = "⏳ Searching...";
+
+        showMessage("🔄 Processing your query and fetching data...");
+
+        try {
+          // Step 1: Generate plan
+          showMessage("🧠 Analyzing your query...");
+          const planResponse = await fetch(
+            "http://localhost:8000/api/v1/plan",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ query }),
+            },
+          );
+
+          if (!planResponse.ok) {
+            throw new Error("Failed to generate plan");
+          }
+
+          const planData = await planResponse.json();
+
+          // Step 2: Execute plan
+          showMessage("🚀 Collecting data from trusted sources...");
+          const execResponse = await fetch(
+            "http://localhost:8000/api/v1/execute",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                session_id: planData.session_id,
+                plan: planData.plan,
+              }),
+            },
+          );
+
+          if (!execResponse.ok) {
+            throw new Error("Failed to execute query");
+          }
+
+          const results = await execResponse.json();
+
+          // Display results
+          hideMessage();
+          displayResults(results.results, query);
+          showMessage("✅ Data retrieved successfully!", "success");
+        } catch (error) {
+          console.error("Error:", error);
+          showMessage(`❌ Error: ${error.message}`, "error");
+        } finally {
+          searchBtn.disabled = false;
+          searchBtn.textContent = "🔍 Search";
+        }
+      }
+
+      function displayResults(results, query) {
+        const resultsCard = document.getElementById("resultsCard");
+        const resultsContainer = document.getElementById("resultsContainer");
+        const resultsCount = document.getElementById("resultsCount");
+
+        if (!results || results.length === 0) {
+          resultsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔍</div>
+                        <div class="empty-state-text">No results found for your query</div>
+                    </div>
+                `;
+          resultsCard.classList.add("show");
+          return;
+        }
+
+        resultsCount.textContent = `${results.length} ${results.length === 1 ? "item" : "items"}`;
+
+        resultsContainer.innerHTML = results
+          .map((result, index) => {
+            const data = result.data || {};
+            const source = result.source || "unknown";
+
+            // Extract title and content
+            let title = data.title || `Result ${index + 1}`;
+            let content = data.content || data.abstract || "";
+            let metadata = [];
+
+            // Add authors for research papers
+            if (data.authors) {
+              metadata.push({ icon: "👥", text: `Authors: ${data.authors}` });
+            }
+
+            // Add publication info
+            if (data.journal) {
+              metadata.push({ icon: "📚", text: data.journal });
+            }
+
+            if (data.publication_date) {
+              const date = new Date(data.publication_date).toLocaleDateString();
+              metadata.push({ icon: "📅", text: `Published: ${date}` });
+            }
+
+            // Add DOI
+            if (data.doi) {
+              metadata.push({ icon: "🔗", text: `DOI: ${data.doi}` });
+            }
+
+            // Add citations
+            if (data.citations) {
+              metadata.push({
+                icon: "📊",
+                text: `${data.citations} citations`,
+              });
+            }
+
+            // Add keywords
+            if (data.keywords) {
+              metadata.push({ icon: "🏷️", text: `Keywords: ${data.keywords}` });
+            }
+
+            // Add URL for web results
+            if (data.url && !data.doi) {
+              metadata.push({ icon: "🌐", text: data.url });
+            }
+
+            // Add fetched time
+            if (data.fetched_at) {
+              const date = new Date(data.fetched_at).toLocaleString();
+              metadata.push({ icon: "🕐", text: `Fetched: ${date}` });
+            }
+
+            // Add records count for database
+            if (data.records_found) {
+              metadata.push({
+                icon: "📁",
+                text: `${data.records_found} records found`,
+              });
+            }
+
+            // Add similarity for vector searches
+            if (data.similarity_score) {
+              metadata.push({
+                icon: "🎯",
+                text: `Relevance: ${(data.similarity_score * 100).toFixed(1)}%`,
+              });
+            }
+
+            // Source emoji map
+            const sourceEmoji = {
+              web: "🌐",
+              research_papers: "📄",
+              database: "🗄️",
+              vector: "🔮",
+            };
+
+            return `
+                    <div class="result-item">
+                        <div class="result-header">
+                            <span class="source-badge">
+                                ${sourceEmoji[source] || "📌"}
+                                ${source.replace("_", " ").toUpperCase()}
+                            </span>
+                        </div>
+                        <div class="result-content">
+                            <div class="result-title">${escapeHtml(title)}</div>
+                            <div class="result-text">${escapeHtml(content || "No description available")}</div>
+                            ${
+                              metadata.length > 0
+                                ? `
+                                <div class="result-meta">
+                                    ${metadata
+                                      .map(
+                                        (m) => `
+                                        <div class="meta-item">
+                                            <span>${m.icon}</span>
+                                            <span>${escapeHtml(m.text)}</span>
+                                        </div>
+                                    `,
+                                      )
+                                      .join("")}
+                                </div>
+                            `
+                                : ""
+                            }
+                        </div>
+                    </div>
+                `;
+          })
+          .join("");
+
+        resultsCard.classList.add("show");
+        resultsCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Allow Enter key to submit (with Shift+Enter for new line)
+      document.getElementById("queryInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          executeQuery();
+        }
+      });
+    </script>
+  </body>
+</html>

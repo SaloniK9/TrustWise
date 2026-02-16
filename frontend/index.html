@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrustWise - Data Extraction Dashboard</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+
+      header {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        margin-bottom: 30px;
+        text-align: center;
+      }
+
+      h1 {
+        color: #667eea;
+        font-size: 2.5em;
+        margin-bottom: 10px;
+      }
+
+      .subtitle {
+        color: #666;
+        font-size: 1.1em;
+      }
+
+      .dashboard {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 30px;
+        margin-bottom: 30px;
+      }
+
+      .card {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      .card h2 {
+        color: #333;
+        margin-bottom: 20px;
+        font-size: 1.5em;
+        border-bottom: 2px solid #667eea;
+        padding-bottom: 10px;
+      }
+
+      .form-group {
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        color: #555;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+
+      input[type="text"],
+      select {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 1em;
+        transition: border-color 0.3s;
+      }
+
+      input[type="text"]:focus,
+      select:focus {
+        outline: none;
+        border-color: #667eea;
+      }
+
+      button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+        width: 100%;
+      }
+
+      button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+
+      button:active {
+        transform: translateY(0);
+      }
+
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .job-filters {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+
+      .job-list {
+        max-height: 600px;
+        overflow-y: auto;
+      }
+
+      .job-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        border-left: 4px solid #667eea;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+      }
+
+      .job-item:hover {
+        transform: translateX(5px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      }
+
+      .job-item.selected {
+        background: #e3e8ff;
+        border-left-color: #764ba2;
+      }
+
+      .job-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+
+      .job-id {
+        font-size: 0.85em;
+        color: #666;
+        font-family: monospace;
+      }
+
+      .job-source {
+        font-weight: 600;
+        color: #333;
+        font-size: 1.1em;
+      }
+
+      .job-meta {
+        display: flex;
+        gap: 15px;
+        font-size: 0.9em;
+        color: #666;
+        margin-top: 5px;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .status-pending {
+        background: #ffeaa7;
+        color: #d63031;
+      }
+      .status-running {
+        background: #74b9ff;
+        color: #0984e3;
+      }
+      .status-success {
+        background: #55efc4;
+        color: #00b894;
+      }
+      .status-failed {
+        background: #ff7675;
+        color: #d63031;
+      }
+
+      .job-details {
+        background: white;
+        padding: 25px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      .detail-section {
+        margin-bottom: 25px;
+      }
+
+      .detail-section h3 {
+        color: #667eea;
+        margin-bottom: 15px;
+        font-size: 1.2em;
+      }
+
+      .detail-row {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+      }
+
+      .detail-label {
+        font-weight: 600;
+        color: #555;
+      }
+
+      .detail-value {
+        color: #333;
+      }
+
+      .extracted-data {
+        max-height: 400px;
+        overflow-y: auto;
+      }
+
+      .data-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        border-left: 4px solid #00b894;
+      }
+
+      .data-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+
+      .trust-score {
+        font-weight: 600;
+        color: #00b894;
+        font-size: 1.1em;
+      }
+
+      .data-content {
+        background: white;
+        padding: 15px;
+        border-radius: 5px;
+        max-height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+
+      .action-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        margin-top: 20px;
+      }
+
+      .loading {
+        text-align: center;
+        color: #667eea;
+        font-weight: 600;
+        padding: 20px;
+      }
+
+      .error-message {
+        background: #ff7675;
+        color: white;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+
+      .success-message {
+        background: #55efc4;
+        color: #00b894;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+
+      .empty-state {
+        text-align: center;
+        color: #999;
+        padding: 40px;
+        font-size: 1.1em;
+      }
+
+      @media (max-width: 968px) {
+        .dashboard {
+          grid-template-columns: 1fr;
+        }
+
+        .job-filters {
+          grid-template-columns: 1fr;
+        }
+
+        .action-buttons {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* Scrollbar styling */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+
+      ::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+      }
+
+      ::-webkit-scrollbar-thumb {
+        background: #667eea;
+        border-radius: 10px;
+      }
+
+      ::-webkit-scrollbar-thumb:hover {
+        background: #764ba2;
+      }
+
+      .api-settings {
+        background: #fff3cd;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+      }
+
+      .api-settings input {
+        font-family: monospace;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>🛡️ TrustWise</h1>
+        <p class="subtitle">Trustworthy Information Orchestration Engine</p>
+      </header>
+
+      <div class="card api-settings">
+        <div class="form-group">
+          <label>API Base URL:</label>
+          <input
+            type="text"
+            id="apiUrl"
+            value="http://localhost:8000"
+            placeholder="http://localhost:8000"
+          />
+        </div>
+      </div>
+
+      <div class="dashboard">
+        <!-- Create Job Panel -->
+        <div class="card">
+          <h2>Create New Job</h2>
+          <div id="createMessage"></div>
+          <form id="createJobForm">
+            <div class="form-group">
+              <label for="sourceName">Source Name:</label>
+              <input
+                type="text"
+                id="sourceName"
+                placeholder="Enter source name"
+                required
+              />
+            </div>
+            <button type="submit" id="createBtn">Create Job</button>
+          </form>
+
+          <hr
+            style="margin: 30px 0; border: none; border-top: 1px solid #ddd"
+          />
+
+          <h2>Start Extraction</h2>
+          <div id="extractMessage"></div>
+          <form id="extractForm">
+            <div class="form-group">
+              <label for="extractJobId">Job ID:</label>
+              <input
+                type="text"
+                id="extractJobId"
+                placeholder="Job UUID"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="extractQuery">Query (optional):</label>
+              <input type="text" id="extractQuery" placeholder="Search query" />
+            </div>
+            <div class="form-group">
+              <label for="extractorType">Extractor Type:</label>
+              <select id="extractorType">
+                <option value="">All Extractors (Parallel)</option>
+                <option value="web">Web Scraping</option>
+                <option value="research">Research API</option>
+                <option value="vector">Vector Database</option>
+              </select>
+            </div>
+            <button type="submit" id="extractBtn">Start Extraction</button>
+          </form>
+        </div>
+
+        <!-- Jobs List Panel -->
+        <div class="card">
+          <h2>Jobs List</h2>
+          <div class="job-filters">
+            <div class="form-group">
+              <label for="statusFilter">Status:</label>
+              <select id="statusFilter">
+                <option value="">All</option>
+                <option value="pending">Pending</option>
+                <option value="running">Running</option>
+                <option value="success">Success</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="sourceFilter">Source:</label>
+              <input
+                type="text"
+                id="sourceFilter"
+                placeholder="Filter by source"
+              />
+            </div>
+            <div class="form-group">
+              <label style="opacity: 0">Action</label>
+              <button onclick="loadJobs()">Refresh</button>
+            </div>
+          </div>
+          <div id="jobsList" class="job-list">
+            <div class="loading">Loading jobs...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Job Details Panel -->
+      <div class="card job-details">
+        <h2>Job Details</h2>
+        <div id="jobDetails">
+          <div class="empty-state">
+            Select a job from the list above to view details
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Configuration
+      let selectedJobId = null;
+      let autoRefreshInterval = null;
+
+      // Get API URL
+      function getApiUrl() {
+        return document.getElementById("apiUrl").value.trim();
+      }
+
+      // Show message
+      function showMessage(elementId, message, isError = false) {
+        const element = document.getElementById(elementId);
+        element.innerHTML = `<div class="${isError ? "error-message" : "success-message"}">${message}</div>`;
+        setTimeout(() => {
+          element.innerHTML = "";
+        }, 5000);
+      }
+
+      // Format date
+      function formatDate(dateString) {
+        if (!dateString) return "N/A";
+        return new Date(dateString).toLocaleString();
+      }
+
+      // Get status badge HTML
+      function getStatusBadge(status) {
+        return `<span class="status-badge status-${status.toLowerCase()}">${status}</span>`;
+      }
+
+      // Create Job
+      document
+        .getElementById("createJobForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const sourceName = document.getElementById("sourceName").value.trim();
+          const createBtn = document.getElementById("createBtn");
+
+          createBtn.disabled = true;
+          createBtn.textContent = "Creating...";
+
+          try {
+            const response = await fetch(`${getApiUrl()}/jobs`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ source_name: sourceName }),
+            });
+
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.detail || "Failed to create job");
+            }
+
+            const job = await response.json();
+            showMessage(
+              "createMessage",
+              `Job created successfully! ID: ${job.id}`,
+            );
+            document.getElementById("sourceName").value = "";
+
+            // Auto-fill extraction form
+            document.getElementById("extractJobId").value = job.id;
+
+            // Refresh job list
+            loadJobs();
+          } catch (error) {
+            showMessage("createMessage", `Error: ${error.message}`, true);
+          } finally {
+            createBtn.disabled = false;
+            createBtn.textContent = "Create Job";
+          }
+        });
+
+      // Start Extraction
+      document
+        .getElementById("extractForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const jobId = document.getElementById("extractJobId").value.trim();
+          const query = document.getElementById("extractQuery").value.trim();
+          const extractorType = document.getElementById("extractorType").value;
+          const extractBtn = document.getElementById("extractBtn");
+
+          extractBtn.disabled = true;
+          extractBtn.textContent = "Extracting...";
+
+          try {
+            let url = `${getApiUrl()}/jobs/${jobId}/extract?`;
+            if (query) url += `query=${encodeURIComponent(query)}&`;
+            if (extractorType) url += `extractor_type=${extractorType}`;
+
+            const response = await fetch(url, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
+
+            if (!response.ok) {
+              const error = await response.json();
+              throw new Error(error.detail || "Extraction failed");
+            }
+
+            const result = await response.json();
+            showMessage("extractMessage", "Extraction started successfully!");
+
+            // Reload job details
+            if (selectedJobId === jobId) {
+              setTimeout(() => loadJobDetails(jobId), 2000);
+            }
+
+            loadJobs();
+          } catch (error) {
+            showMessage("extractMessage", `Error: ${error.message}`, true);
+          } finally {
+            extractBtn.disabled = false;
+            extractBtn.textContent = "Start Extraction";
+          }
+        });
+
+      // Load Jobs List
+      async function loadJobs() {
+        const status = document.getElementById("statusFilter").value;
+        const source = document.getElementById("sourceFilter").value.trim();
+
+        try {
+          let url = `${getApiUrl()}/jobs?limit=50`;
+          if (status) url += `&status=${status}`;
+          if (source) url += `&source=${encodeURIComponent(source)}`;
+
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("Failed to load jobs");
+
+          const data = await response.json();
+          displayJobs(data.items);
+        } catch (error) {
+          document.getElementById("jobsList").innerHTML =
+            `<div class="error-message">Error loading jobs: ${error.message}</div>`;
+        }
+      }
+
+      // Display Jobs
+      function displayJobs(jobs) {
+        const jobsList = document.getElementById("jobsList");
+
+        if (jobs.length === 0) {
+          jobsList.innerHTML = '<div class="empty-state">No jobs found</div>';
+          return;
+        }
+
+        jobsList.innerHTML = jobs
+          .map(
+            (job) => `
+                <div class="job-item ${selectedJobId === job.id ? "selected" : ""}" 
+                     onclick="selectJob('${job.id}')">
+                    <div class="job-header">
+                        <span class="job-source">${job.source_name}</span>
+                        ${getStatusBadge(job.status)}
+                    </div>
+                    <div class="job-id">ID: ${job.id}</div>
+                    <div class="job-meta">
+                        <span>📅 ${formatDate(job.created_at)}</span>
+                    </div>
+                </div>
+            `,
+          )
+          .join("");
+      }
+
+      // Select Job
+      async function selectJob(jobId) {
+        selectedJobId = jobId;
+        document.getElementById("extractJobId").value = jobId;
+        await loadJobDetails(jobId);
+        loadJobs(); // Refresh to update selected state
+      }
+
+      // Load Job Details
+      async function loadJobDetails(jobId) {
+        const detailsDiv = document.getElementById("jobDetails");
+        detailsDiv.innerHTML =
+          '<div class="loading">Loading job details...</div>';
+
+        try {
+          const response = await fetch(`${getApiUrl()}/jobs/${jobId}`);
+          if (!response.ok) throw new Error("Failed to load job details");
+
+          const job = await response.json();
+          displayJobDetails(job);
+        } catch (error) {
+          detailsDiv.innerHTML = `<div class="error-message">Error loading job details: ${error.message}</div>`;
+        }
+      }
+
+      // Display Job Details
+      function displayJobDetails(job) {
+        const detailsDiv = document.getElementById("jobDetails");
+
+        let html = `
+                <div class="detail-section">
+                    <h3>Job Information</h3>
+                    <div class="detail-row">
+                        <div class="detail-label">ID:</div>
+                        <div class="detail-value">${job.id}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Source:</div>
+                        <div class="detail-value">${job.source_name}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Status:</div>
+                        <div class="detail-value">${getStatusBadge(job.status)}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Created:</div>
+                        <div class="detail-value">${formatDate(job.created_at)}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Started:</div>
+                        <div class="detail-value">${formatDate(job.started_at)}</div>
+                    </div>
+                    <div class="detail-row">
+                        <div class="detail-label">Completed:</div>
+                        <div class="detail-value">${formatDate(job.completed_at)}</div>
+                    </div>
+                    ${
+                      job.error_message
+                        ? `
+                    <div class="detail-row">
+                        <div class="detail-label">Error:</div>
+                        <div class="detail-value" style="color: #d63031;">${job.error_message}</div>
+                    </div>
+                    `
+                        : ""
+                    }
+                </div>
+
+                <div class="detail-section">
+                    <h3>Extracted Data (${job.data.length} items)</h3>
+                    <div class="extracted-data">
+            `;
+
+        if (job.data.length === 0) {
+          html += '<div class="empty-state">No data extracted yet</div>';
+        } else {
+          job.data.forEach((item) => {
+            html += `
+                        <div class="data-item">
+                            <div class="data-header">
+                                <span><strong>Source:</strong> ${item.source}</span>
+                                <span class="trust-score">Trust: ${(item.trust_score * 100).toFixed(1)}%</span>
+                            </div>
+                            <div style="font-size: 0.85em; color: #666; margin-bottom: 10px;">
+                                📅 ${formatDate(item.extracted_at)}
+                            </div>
+                            <div class="data-content">${JSON.stringify(item.data, null, 2)}</div>
+                        </div>
+                    `;
+          });
+        }
+
+        html += `
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button onclick="loadJobDetails('${job.id}')">🔄 Refresh Details</button>
+                    <button onclick="startAutoRefresh('${job.id}')">⏱️ Auto-refresh (5s)</button>
+                </div>
+            `;
+
+        detailsDiv.innerHTML = html;
+      }
+
+      // Auto-refresh job details
+      function startAutoRefresh(jobId) {
+        if (autoRefreshInterval) {
+          clearInterval(autoRefreshInterval);
+          autoRefreshInterval = null;
+          showMessage("extractMessage", "Auto-refresh stopped");
+          return;
+        }
+
+        autoRefreshInterval = setInterval(() => {
+          if (selectedJobId === jobId) {
+            loadJobDetails(jobId);
+            loadJobs();
+          } else {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+          }
+        }, 5000);
+
+        showMessage("extractMessage", "Auto-refresh enabled (5 seconds)");
+      }
+
+      // Event Listeners
+      document
+        .getElementById("statusFilter")
+        .addEventListener("change", loadJobs);
+      document.getElementById("sourceFilter").addEventListener(
+        "input",
+        debounce(() => loadJobs(), 500),
+      );
+
+      // Debounce helper
+      function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+          const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+          };
+          clearTimeout(timeout);
+          timeout = setTimeout(later, wait);
+        };
+      }
+
+      // Initialize
+      window.addEventListener("DOMContentLoaded", () => {
+        loadJobs();
+        // Auto-refresh job list every 10 seconds
+        setInterval(loadJobs, 10000);
+      });
+    </script>
+  </body>
+</html>
